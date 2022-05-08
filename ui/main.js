@@ -14,8 +14,15 @@ let Enabled = false;
 
 const DRILL_HEAT_DECAY = 2;
 const DRILL_HEAT_INCREASE = 1;
+const DRILL_ACCELERATION = 1;
 const MAX_SPIN = 1;
 const MIN_SPIN = 0;
+
+const PRISTIME = "./assets/pristine_rod.png";
+const DAMAGED = "./assets/damaged_rod.png";
+const ROD_HOLDER = "./assets/rod_casing.png";
+const DRILL_HOT = "./assets/drill_bit_hot.png"
+const DRILL = "./assets/drill_bit.png"
 
 let InputDrillPressed = false;
 
@@ -23,52 +30,108 @@ let DrillHeat = 0;
 let DrillHealth = 0;
 let DrillYOffset = 0;
 let DrillSpinRate = 0;
-let DrillHotCounter = 0;
 
-let RodCount = 1; // TODO
+let RodCount = 0;
 let CurrentRodIndex = 0;
-let RodHealths;
+let RodHealths = [];
 
-let Content = $('#content');
-let Drill = $('#drill');
-let Locks = $('.fresh-lock-rod'); //array
+let Canvas;
+let DrillX;
+let DrillY;
+let LockX;
+let LockY;
+let DrillHot;
+let DrillNormal;
+let DrillImg;
+let RodImg;
+let DamagedRodImg;
+let RodHolderImg;
 
+let Content = $("#content");
 
+//////////////////////////////////////////////////////////////////////////////
+//                                                                          //
+// Functions                                                                //
+//                                                                          //
+//////////////////////////////////////////////////////////////////////////////
 
-function Start()
+function OnEnabled()
 {
-    let length = Locks.length;
+    console.log("enabled");
+    Init();
+    UpdateInterval = setInterval(Update, 50); // 20tps
+    Content.show();
+    Enabled = true;
 
-    if (length < 1)
+}
+
+function OnDisable()
+{
+    console.log("disabled");
+    InputDrillPressed = false;
+    Content.hide();
+    clearInterval(UpdateInterval)
+    Cleanup();
+    Enabled = false;
+}
+
+function Init()
+{
+    DrillHot = loadImage(DRILL_HOT);
+    DrillImg = loadImage(DRILL);
+    DrillNormal = loadImage(DRILL);
+    DrillHot.loadPixels();
+    DrillImg.loadPixels();
+    DrillNormal.loadPixels();
+
+    DrillHealth = 100; //TODO
+
+    for (i = 0; i < RodCount; ++i)
     {
-        console.log("Locks length is less than 1!");
+        RodHealths.push(400 + Math.random() * 200);
     }
+}
 
-    for (i = 0; i < length; ++i)
+function Cleanup()
+{
+    RodHealths = [];
+    if (Enabled)
     {
-        RodHealths[i] = 10 + Math.random() * 2;
+        clear();
+
+        // I dont want the pixel arrays lingering when not opened
+        DrillImg = null;
+        DrillNormal = null;
+        DrillHot = null;
     }
 }
 
 function Update()
 {
     // Drill damage
-    if (DrillHeat > 99 && DrillHotCounter++ >= 20)
+    if (DrillHeat > 99)
     {
         DrillHotCounter = 0;
-        DrillHealth -= 1;
+        DrillHealth -= .2;
+    }
+
+    if (DrillHealth <= 0)
+    {
+        HandleDrillBreak();
     }
 
     if (InputDrillPressed) // Spin up, heat, and rod damage
     {
-        DrillSpinRate = Clamp(DrillSpinRate + DRILL_WINDUP, MIN_SPIN, MAX_SPIN);
+        console.log("drilling", DrillSpinRate, RodHealths[CurrentRodIndex], DrillHealth, DrillHeat);
+
+        DrillSpinRate = Clamp(DrillSpinRate + DRILL_ACCELERATION, MIN_SPIN, MAX_SPIN);
         if (DrillSpinRate == MAX_SPIN)
         {
             DrillHeat += DRILL_HEAT_INCREASE;
-            RodHealths -= 1;
-            if (RodHealths < 0)
+            RodHealths[CurrentRodIndex] -= 1;
+            if (RodHealths[CurrentRodIndex] <= 0)
             {
-                BreakRod();
+                HandleRodBreak();
             }
         }
     }
@@ -80,27 +143,88 @@ function Update()
             DrillHeat = Math.max(0, DrillHeat - DRILL_HEAT_DECAY);
         }
     }
-    //Lock.css('transform', `rotate(${Rotation})`);
-
-    //TODO
-    // colors
-    // wobble?
-    // inputed difficulty
 }
 
-function End()
-{
-}
-
-function BreakRod()
+function HandleRodBreak()
 {
     ++CurrentRodIndex
     DrillHealth -= 2.5;
+
+    if (CurrentRodIndex == RodCount)
+    {
+        HandleAllRodsBroken();
+    }
+}
+
+function HandleDrillBreak()
+{
+
+}
+
+function HandleAllRodsBroken()
+{
+
 }
 
 function Clamp(num, min, max)
 {
     return Math.min(max, Math.max(min, num))
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//                                                                          //
+// p5                                                                       //
+//                                                                          //
+//////////////////////////////////////////////////////////////////////////////
+
+// runs onces on startup
+function setup()
+{
+    let cX = windowWidth / 2;
+    let cY = windowHeight / 2;
+    Canvas = createCanvas(600, 600);
+    Canvas.position(cX - 300, cY - 300);
+    DrillX = 300;
+    DrillY = 300;
+    LockX = 300;
+    LockY = 300;
+
+    RodImg = loadImage(PRISTIME);
+    DamagedRodImg = loadImage(DAMAGED);
+    RodHolderImg = loadImage(ROD_HOLDER);
+
+    // just to make sure any remaining variables are cleaned up on restart
+    OnDisable();
+}
+
+function draw()
+{
+    if (!Enabled) return;
+    clear();
+
+    let yOffset = 0;
+    for (i = 0; i < RodCount; ++i)
+    {
+        image(RodHolderImg, LockX, LockY + yOffset)
+        image(RodImg, LockX, LockY + yOffset)
+        yOffset += 13;
+    }
+
+    let f = Math.max(0, (DrillHeat - 25) / 75);
+    for (i = 0; i < DrillImg.pixels.length; i += 4)
+    {
+        let r = DrillNormal.pixels[i]
+        let g = DrillNormal.pixels[i + 1];
+        let b = DrillNormal.pixels[i + 2];
+        let r2 = DrillHot.pixels[i]
+        let g2 = DrillHot.pixels[i + 1];
+        let b2 = DrillHot.pixels[i + 2];
+        DrillImg.pixels[i] = lerp(r, r2, f);
+        DrillImg.pixels[i + 1] = lerp(g, g2, f);
+        DrillImg.pixels[i + 2] = lerp(b, b2, f);
+    }
+    DrillImg.updatePixels();
+    image(DrillImg, DrillX, DrillY - 100);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -115,6 +239,7 @@ window.addEventListener('message', event => {
     {
         if (event.data.enabled === true)
         {
+            RodCount = event.data.rodCount || 1;
             OnEnabled();
         }
         else
@@ -127,43 +252,24 @@ window.addEventListener('message', event => {
 // Ecs will cancel the lockpicking
 document.onkeydown = function(event)
 {
-    console.log(event.code);
     if (!Enabled) return;
     if (event.code === "Escape" || event.code === "Ecs")
     {
         SendToLua(SUCCESS);
     }
-    else if (event.code === "UpArrow")
+    else if (event.code === "ArrowUp")
     {
         InputDrillPressed = true;
     }
 }
 
-document.addEventListener("onkeyup", event => {
+document.onkeyup = function(event)
+{
     if (!Enabled) return;
-    if (event.code === "UpArrow")
+    if (event.code === "ArrowUp")
     {
         InputDrillPressed = false;
     }
-})
-
-function OnEnabled()
-{
-    console.log("enabled");
-    Enabled = true;
-    Start();
-    UpdateInterval = setInterval(Update, 20);
-    Content.show();
-}
-
-function OnDisable()
-{
-    console.log("disabled");
-    Enabled = false;
-    clearInterval(UpdateInterval)
-    End();
-    Content.hide();
-    InputDrillPressed = false;
 }
 
 // Sends result to lua
@@ -183,5 +289,3 @@ function SendToLua(state)
         })
     }).then(resp => resp.json()).then(resp => console.log(resp));
 }
-
-OnDisable();

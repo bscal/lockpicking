@@ -2,32 +2,23 @@ local IsLockpicking = false
 local CurrentStatus = 0
 
 RegisterCommand("DebugLockpick", function(source, args)
-    StartLockpicking()
---[[
-    Citizen.CreateThread(function()
-        while IsLockpicking do
-            DisableControlAction(0,24, true) -- disable attack
-            DisableControlAction(0,25, true) -- disable aim
-            DisableControlAction(0, 1, true) -- LookLeftRight
-            DisableControlAction(0, 2, true) -- LookUpDown
-            Citizen.Wait(0)
-        end
-    end)]]
+    StartLockpicking(2)
 end, false)
 
-function StartLockpicking()
+function StartLockpicking(rodCount)
     IsLockpicking = true
 
     print("Starting to lockpick!")
 
     SendNUIMessage({
         type = "SetLockpicking",
-        enabled = IsLockpicking
+        enabled = IsLockpicking,
+        rodCount = rodCount,
     })
     SetNuiFocus(true, false)
 end
 
-local function Cleanup()
+function Cleanup()
     IsLockpicking = false
     SetNuiFocus(false, false)
 end
@@ -39,4 +30,4 @@ RegisterNUICallback('LockpickResult', function(data, cb)
     cb('ok')
 end)
 
-Cleanup()
+exports('StartLockpicking', StartLockpicking(rodCount))

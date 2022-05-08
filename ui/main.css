@@ -1,24 +1,31 @@
-.lock-container
+#rod-casing
 {
-
+    visibility: visible;
+    position: fixed;
+    bottom: 50%;
+    left:  calc(50% - 21px);
+    z-index: auto;
 }
 
-.fresh-lock-rod
+#drill-bit
 {
-
+    visibility: visible;
+    position: fixed;
+    bottom: calc(50% - 22px);
+    left:  calc(50% - 5px);
+    z-index: auto;
 }
 
-.damaged-lock-rod
+.rod
 {
-
+    visibility: visible;
+    position: fixed;
+    bottom: calc(50% + 3px);
+    left:  calc(50% - 16px);
+    z-index: auto;
 }
 
-#lock-rod
+.destroyed-rod
 {
-
-}
-
-#drill
-{
-
+    visibility: hidden;
 }
