@@ -9,45 +9,41 @@ const NONE = 0;
 const SUCCESS = 1;
 const FAILURE = 2;
 
-let UpdateInterval;
-let Enabled = false;
-
 const DRILL_HEAT_DECAY = 2;
 const DRILL_HEAT_INCREASE = 1;
-const DRILL_ACCELERATION = 1;
+const MAX_DRILL_HEAT = 100;
+const DRILL_ACCELERATION = 0.1;
 const MAX_SPIN = 1;
 const MIN_SPIN = 0;
+const MAX_ANGLE = 2.0;
+const ANGLE_DELTA = 0.5;
 
-const PRISTIME = "./assets/pristine_rod.png";
-const DAMAGED = "./assets/damaged_rod.png";
-const ROD_HOLDER = "./assets/rod_casing.png";
-const DRILL_HOT = "./assets/drill_bit_hot.png"
-const DRILL = "./assets/drill_bit.png"
-
+let UpdateInterval; // interval handler
+let Enabled = false;
 let InputDrillPressed = false;
 
-let DrillHeat = 0;
-let DrillHealth = 0;
-let DrillYOffset = 0;
-let DrillSpinRate = 0;
-
-let RodCount = 0;
-let CurrentRodIndex = 0;
-let RodHealths = [];
-
-let Canvas;
-let DrillX;
-let DrillY;
-let LockX;
-let LockY;
 let DrillHot;
 let DrillNormal;
 let DrillImg;
 let RodImg;
 let DamagedRodImg;
 let RodHolderImg;
-
+let Canvas;
 let Content = $("#content");
+
+let RodHealthArray; // array
+let DrillHeat = 0;
+let DrillHealth = 0;
+let DrillYOffset = 0;
+let DrillSpinRate = 0;
+let RodCount = 0;
+let CurrentRodIndex = 0;
+let DrillX = 0;
+let DrillY = 0;
+let LockX = 0;
+let LockY = 0;
+let CurrentWobbleAngle = 0.0;
+let IsWobblingLeft = true;
 
 //////////////////////////////////////////////////////////////////////////////
 //                                                                          //
@@ -58,51 +54,55 @@ let Content = $("#content");
 function OnEnabled()
 {
     console.log("enabled");
-    Init();
     UpdateInterval = setInterval(Update, 50); // 20tps
+
+    for (i = 0; i < RodCount; ++i)
+    {
+        RodHealthArray.push(400 + Math.random() * 200);
+    }
+
+    DrillHot.loadPixels();
+    DrillImg.loadPixels();
+    DrillNormal.loadPixels();
+
+    loop();
     Content.show();
     Enabled = true;
-
 }
 
 function OnDisable()
 {
     console.log("disabled");
-    InputDrillPressed = false;
     Content.hide();
+    InputDrillPressed = false;
+    RodHealthArray = [];
     clearInterval(UpdateInterval)
-    Cleanup();
-    Enabled = false;
-}
 
-function Init()
-{
-    DrillHot = loadImage(DRILL_HOT);
-    DrillImg = loadImage(DRILL);
-    DrillNormal = loadImage(DRILL);
-    DrillHot.loadPixels();
-    DrillImg.loadPixels();
-    DrillNormal.loadPixels();
-
-    DrillHealth = 100; //TODO
-
-    for (i = 0; i < RodCount; ++i)
-    {
-        RodHealths.push(400 + Math.random() * 200);
-    }
-}
-
-function Cleanup()
-{
-    RodHealths = [];
     if (Enabled)
     {
         clear();
+        // I feel its wasteful to store these pixel arrays when not in use
+        DrillImg.pixels = null;
+        DrillNormal.pixels = null;
+        DrillHot.pixels = null;
+        // wont call draw()
+        noLoop();
+    }
 
-        // I dont want the pixel arrays lingering when not opened
-        DrillImg = null;
-        DrillNormal = null;
-        DrillHot = null;
+    Enabled = false;
+}
+
+function UpdateWobble()
+{
+    let delta = (IsWobblingLeft) ? -ANGLE_DELTA : ANGLE_DELTA;
+    CurrentWobbleAngle += lerp(0, delta, DrillSpinRate);
+    if (CurrentWobbleAngle <= -MAX_ANGLE)
+    {
+        IsWobblingLeft = false;
+    }
+    else if (CurrentWobbleAngle >= MAX_ANGLE)
+    {
+        IsWobblingLeft = true;
     }
 }
 
@@ -122,14 +122,14 @@ function Update()
 
     if (InputDrillPressed) // Spin up, heat, and rod damage
     {
-        console.log("drilling", DrillSpinRate, RodHealths[CurrentRodIndex], DrillHealth, DrillHeat);
+        console.log("drilling", DrillSpinRate, RodHealthArray[CurrentRodIndex], DrillHealth, DrillHeat);
 
         DrillSpinRate = Clamp(DrillSpinRate + DRILL_ACCELERATION, MIN_SPIN, MAX_SPIN);
-        if (DrillSpinRate == MAX_SPIN)
+        if (DrillSpinRate >= MAX_SPIN)
         {
-            DrillHeat += DRILL_HEAT_INCREASE;
-            RodHealths[CurrentRodIndex] -= 1;
-            if (RodHealths[CurrentRodIndex] <= 0)
+            DrillHeat = Math.min(MAX_DRILL_HEAT, DrillHeat + DRILL_HEAT_INCREASE);
+            RodHealthArray[CurrentRodIndex] -= 1;
+            if (RodHealthArray[CurrentRodIndex] <= 0)
             {
                 HandleRodBreak();
             }
@@ -177,7 +177,7 @@ function Clamp(num, min, max)
 //                                                                          //
 //////////////////////////////////////////////////////////////////////////////
 
-// runs onces on startup
+// runs once on script ensure
 function setup()
 {
     let cX = windowWidth / 2;
@@ -188,10 +188,16 @@ function setup()
     DrillY = 300;
     LockX = 300;
     LockY = 300;
-
-    RodImg = loadImage(PRISTIME);
-    DamagedRodImg = loadImage(DAMAGED);
-    RodHolderImg = loadImage(ROD_HOLDER);
+    angleMode(DEGREES);
+    imageMode(CENTER);
+    
+    RodImg = loadImage("./assets/pristine_rod.png");
+    DamagedRodImg = loadImage("./assets/damaged_rod.png");
+    RodHolderImg = loadImage("./assets/rod_casing.png");
+    DrillHot = loadImage("./assets/drill_bit_hot.png");
+    let drill = "./assets/drill_bit.png";
+    DrillImg = loadImage(drill);
+    DrillNormal = loadImage(drill);
 
     // just to make sure any remaining variables are cleaned up on restart
     OnDisable();
@@ -202,6 +208,8 @@ function draw()
     if (!Enabled) return;
     clear();
 
+    UpdateWobble();
+
     let yOffset = 0;
     for (i = 0; i < RodCount; ++i)
     {
@@ -210,7 +218,9 @@ function draw()
         yOffset += 13;
     }
 
-    let f = Math.max(0, (DrillHeat - 25) / 75);
+    // Sets the pixels of a drill img between normal drill and hot drill
+    let t = Math.max(0, (DrillHeat - 25) / 75);
+
     for (i = 0; i < DrillImg.pixels.length; i += 4)
     {
         let r = DrillNormal.pixels[i]
@@ -219,12 +229,16 @@ function draw()
         let r2 = DrillHot.pixels[i]
         let g2 = DrillHot.pixels[i + 1];
         let b2 = DrillHot.pixels[i + 2];
-        DrillImg.pixels[i] = lerp(r, r2, f);
-        DrillImg.pixels[i + 1] = lerp(g, g2, f);
-        DrillImg.pixels[i + 2] = lerp(b, b2, f);
+        DrillImg.pixels[i] = lerp(r, r2, t);
+        DrillImg.pixels[i + 1] = lerp(g, g2, t);
+        DrillImg.pixels[i + 2] = lerp(b, b2, t);
     }
     DrillImg.updatePixels();
-    image(DrillImg, DrillX, DrillY - 100);
+    push();
+    translate(DrillX, DrillY + 50);
+    rotate(CurrentWobbleAngle)
+    image(DrillImg, 0, 0);
+    pop();
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -240,6 +254,7 @@ window.addEventListener('message', event => {
         if (event.data.enabled === true)
         {
             RodCount = event.data.rodCount || 1;
+            DrillHealth = event.data.drillHealth || 0;
             OnEnabled();
         }
         else
