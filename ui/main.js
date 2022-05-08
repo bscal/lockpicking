@@ -147,24 +147,19 @@ function Update()
 
 function HandleRodBreak()
 {
-    ++CurrentRodIndex
-    DrillHealth -= 2.5;
-
-    if (CurrentRodIndex == RodCount)
+    DrillYOffset -= 18;
+    DrillHealth -= 1;
+    if (++CurrentRodIndex == RodCount) // All rods broken
     {
-        HandleAllRodsBroken();
+        SendToLua(SUCCESS);
     }
 }
 
 function HandleDrillBreak()
 {
-
+    SendToLua(FAILURE);
 }
 
-function HandleAllRodsBroken()
-{
-
-}
 
 function Clamp(num, min, max)
 {
@@ -190,7 +185,7 @@ function setup()
     LockY = 300;
     angleMode(DEGREES);
     imageMode(CENTER);
-    
+
     RodImg = loadImage("./assets/pristine_rod.png");
     DamagedRodImg = loadImage("./assets/damaged_rod.png");
     RodHolderImg = loadImage("./assets/rod_casing.png");
@@ -214,12 +209,15 @@ function draw()
     for (i = 0; i < RodCount; ++i)
     {
         image(RodHolderImg, LockX, LockY + yOffset)
-        image(RodImg, LockX, LockY + yOffset)
+        if (RodHealthArray[i] > 100)
+            image(RodImg, LockX, LockY + yOffset)
+        else if (RodHealthArray[i] > 0)
+            image(DamagedRodImg, LockX, LockY + yOffset)
         yOffset += 13;
     }
 
     // Sets the pixels of a drill img between normal drill and hot drill
-    let t = Math.max(0, (DrillHeat - 25) / 75);
+    let t = Math.max(0, (DrillHeat - 50) / 50);
 
     for (i = 0; i < DrillImg.pixels.length; i += 4)
     {
@@ -235,7 +233,7 @@ function draw()
     }
     DrillImg.updatePixels();
     push();
-    translate(DrillX, DrillY + 50);
+    translate(DrillX, DrillY + DrillYOffset + 40);
     rotate(CurrentWobbleAngle)
     image(DrillImg, 0, 0);
     pop();
